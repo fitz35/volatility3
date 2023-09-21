@@ -1,3 +1,5 @@
+import os
+import time
 from dataclasses import dataclass
 from enum import Enum
 from volatility3.framework import constants, interfaces, renderers
@@ -9,7 +11,8 @@ from volatility3.framework.objects import Pointer, StructType
 from volatility3.framework.renderers import format_hints
 from graphviz import Digraph
 
-OUTPUT_FOLDER = "/home/clement/Documents/github/Real_life_security_seminar/graphs/volatility_result"
+OUTPUT_FOLDER = "/home/clement/Documents/seminar_data/results/"
+TIME_FILE = "timing_results.txt"
 BEGIN_STRUCT_NAME = "kmem_cache"
 
 GENERATE_POINTER = True
@@ -74,7 +77,7 @@ class Graph(interfaces.plugins.PluginInterface):
                                             architectures = ["Intel32", "Intel64"])]
     
     def run(self):
-        return renderers.TreeGrid([("name", str), ("addr", format_hints.Hex), ("output_file", str)], self._generator())
+        return renderers.TreeGrid([("name", str), ("addr", format_hints.Hex), ("output_file", str), ("time (s)", float)], self._generator())
     
 
     def _generator(
@@ -101,9 +104,12 @@ class Graph(interfaces.plugins.PluginInterface):
                 pass
             except LayerException:
                 pass
+
+        all_time = 0
         
         for symbol in found_symbol:
             try:
+                start_time = time.time()
                 # get the struct
                 struct_obj = self._vmlinux.object_from_symbol(symbol_name = symbol, absolute=True)
                 self._graph = Digraph(comment=f"The {symbol} struct")
@@ -112,13 +118,23 @@ class Graph(interfaces.plugins.PluginInterface):
                 self._generate_graph(struct_obj)
 
                 # render the graph
-                output_file = f"{OUTPUT_FOLDER}{symbol}.gv"
+                output_file = os.path.join(OUTPUT_FOLDER, f"{symbol}.gv")
                 self._graph.render(output_file, view=False)
 
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+                all_time += elapsed_time
 
-                yield (0, (symbol, format_hints.Hex(struct_obj.vol.offset), output_file))
+                with open(os.path.join(OUTPUT_FOLDER, TIME_FILE), 'a') as f:
+                    f.write(f"{elapsed_time}\n")
+
+                yield (0, (symbol, format_hints.Hex(struct_obj.vol.offset), output_file, elapsed_time))
             except LayerException:
                 yield (0, (symbol, format_hints.Hex(0), "error !"))
+
+        with open(os.path.join(OUTPUT_FOLDER, TIME_FILE), 'a') as f:
+            f.write(f"cumulatif time (s) : {all_time}\n")
+            f.write(f"mean : {all_time/len(found_symbol)}\n")
 
     def _generate_graph(self, obj : ObjectInterface):
         """
