@@ -11,9 +11,9 @@ from volatility3.framework.objects import Pointer, StructType
 from volatility3.framework.renderers import format_hints
 from graphviz import Digraph
 
-OUTPUT_FOLDER = "/home/clement/Documents/seminar_data/results/"
+OUTPUT_FOLDER = "/home/clement/Documents/seminar_data/results3/"
 TIME_FILE = "timing_results.txt"
-BEGIN_STRUCT_NAME = "kmem_cache"
+BEGIN_STRUCT_NAME = "cpuhp_cpu_state"
 
 GENERATE_POINTER = True
 
@@ -108,8 +108,9 @@ class Graph(interfaces.plugins.PluginInterface):
         all_time = 0
         
         for symbol in found_symbol:
+            start_time = time.time()
             try:
-                start_time = time.time()
+                
                 # get the struct
                 struct_obj = self._vmlinux.object_from_symbol(symbol_name = symbol, absolute=True)
                 self._graph = Digraph(comment=f"The {symbol} struct")
@@ -130,11 +131,17 @@ class Graph(interfaces.plugins.PluginInterface):
 
                 yield (0, (symbol, format_hints.Hex(struct_obj.vol.offset), output_file, elapsed_time))
             except LayerException:
-                yield (0, (symbol, format_hints.Hex(0), "error !"))
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+                yield (0, (symbol, format_hints.Hex(0), "LayerException !", elapsed_time))
 
-        with open(os.path.join(OUTPUT_FOLDER, TIME_FILE), 'a') as f:
-            f.write(f"cumulatif time (s) : {all_time}\n")
-            f.write(f"mean : {all_time/len(found_symbol)}\n")
+
+        if len(found_symbol) > 0:
+            with open(os.path.join(OUTPUT_FOLDER, TIME_FILE), 'a') as f:
+                f.write(f"cumulatif time (s) : {all_time}\n")
+                f.write(f"mean : {all_time/len(found_symbol)}\n")
+        else:
+            yield (0, ("no symbol found", format_hints.Hex(0), "error !", 0.0))
 
     def _generate_graph(self, obj : ObjectInterface):
         """
